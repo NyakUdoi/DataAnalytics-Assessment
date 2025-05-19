@@ -1,32 +1,9 @@
 # **DataAnalytics-Assessment** **SQL Data Analyst Assessment\_Cowrywise**
 
 **Assessment\_Q1**  
-**CODE**:
-
-SELECT  
-    u.id AS owner\_id,  
-    COALESCE(u.name, CONCAT(u.first\_name, ' ', u.last\_name)) AS name,  
-    SUM(CASE WHEN pp.is\_regular\_savings \= 1 THEN 1 ELSE 0 END) AS savings\_count,  
-    SUM(CASE WHEN pp.is\_a\_fund \= 1 THEN 1 ELSE 0 END) AS investment\_count,  
-    ROUND(SUM(ssa.confirmed\_amount / 100000), 2\) AS total\_deposits  
-FROM  
-    adashi\_staging.users\_customuser u  
-JOIN  
-    adashi\_staging.plans\_plan pp ON u.id \= pp.owner\_id  
-LEFT JOIN  
-    adashi\_staging.savings\_savingsaccount ssa ON pp.id \= ssa.plan\_id  
-WHERE  
-    pp.is\_a\_goal \= 0 \-- Assuming non-goal plans are funded savings/investments  
-GROUP BY  
-    u.id, name  
-HAVING  
-    SUM(CASE WHEN pp.is\_regular\_savings \= 1 THEN 1 ELSE 0 END) \> 0 AND  
-    SUM(CASE WHEN pp.is\_a\_fund \= 1 THEN 1 ELSE 0 END) \> 0  
-ORDER BY  
-    total\_deposits DESC;
-
 **SCREENSHOT**:  
-![][image1]
+
+![Assessment_Q1 Screenshot](https://github.com/user-attachments/assets/014dd6aa-c295-4fae-8d2f-90832c0eaee3)
 
 **Explanation:**
 
@@ -52,48 +29,14 @@ Specifies the tables involved and how they are linked:
 **HAVING SUM(CASE WHEN pp.is\_regular\_savings \= 1 THEN 1 ELSE 0 END) \> 0 AND SUM(CASE WHEN pp.is\_a\_fund \= 1 THEN 1 ELSE 0 END) \> 0:** Filters the grouped results to include only users who have at least one regular savings plan (is\_regular\_savings \= 1\) AND at least one investment plan (is\_a\_fund \= 1).  
 **ORDER BY total\_deposits DESC:** Sorts the final result set in descending order based on the total\_deposits, displaying users with the highest total deposit amounts first.
 
+__________________________________________________________________
+
+
 **Assessment\_Q2**  
-**CODE**:
-
-SELECT  
-    CASE  
-        WHEN avg\_monthly\_verifications \>= 10 THEN 'High Frequency'  
-        WHEN avg\_monthly\_verifications BETWEEN 3 AND 9 THEN 'Medium Frequency'  
-        ELSE 'Low Frequency'  
-    END AS frequency\_category,  
-    COUNT(DISTINCT owner\_id) AS customer\_count,  
-    AVG(avg\_monthly\_verifications) AS avg\_transactions\_per\_month  
-FROM (  
-    SELECT  
-        owner\_id,  
-        AVG(monthly\_verification\_count) AS avg\_monthly\_verifications  
-    FROM (  
-        SELECT  
-            owner\_id,  
-            DATE\_FORMAT(verification\_transaction\_date, '%Y-%m') AS transaction\_month,  
-            COUNT(\*) AS monthly\_verification\_count  
-        FROM  
-            adashi\_staging.savings\_savingsaccount  
-        WHERE verification\_transaction\_date IS NOT NULL  
-        GROUP BY  
-            owner\_id,  
-            transaction\_month  
-    ) AS monthly\_counts  
-    GROUP BY  
-        owner\_id  
-) AS user\_averages  
-GROUP BY  
-    frequency\_category  
-ORDER BY  
-    CASE  
-        WHEN frequency\_category \= 'High Frequency' THEN 1  
-        WHEN frequency\_category \= 'Medium Frequency' THEN 2  
-        ELSE 3  
-    END;
-
 **SCREENSHOT**:
 
-![][image2]
+![Assessment_Q2 Screenshot](https://github.com/user-attachments/assets/58f8ebc9-2f3b-4a2a-be6e-3034c99e736a)
+
 
 **Explanation:**
 
@@ -104,37 +47,14 @@ ORDER BY
 * **Joining and Aggregation**:   
   * The subquery result (monthly verification transaction counts per user) is joined with the users\_customuser table.  
   * The main query then categorizes users based on their *average monthly verification transaction count*, counts the number of users in each category, and calculates the average transaction count for each category.
+ 
+__________________________________________________________________
 
 **Assessment\_Q3**  
-**CODE**:
-
-SELECT  
-    pp.id AS plan\_id,  
-    pp.owner\_id,  
-    CASE  
-        WHEN pp.is\_regular\_savings \= 1 THEN 'Savings'  
-        WHEN pp.is\_a\_fund \= 1 THEN 'Investment'  
-        ELSE 'Other' \-- Handle cases that are neither explicitly savings nor investment  
-    END AS type,  
-    MAX(ssa.transaction\_date) AS last\_transaction\_date,  
-    DATEDIFF(CURDATE(), MAX(ssa.transaction\_date)) AS inactivity\_days  
-FROM  
-    adashi\_staging.plans\_plan pp  
-LEFT JOIN  
-    adashi\_staging.savings\_savingsaccount ssa ON pp.id \= ssa.plan\_id  
-WHERE  
-    pp.is\_deleted \= 0 \-- Assuming is\_deleted \= 0 indicates an active plan  
-    AND pp.is\_archived \= 0 \-- Assuming is\_archived \= 0 indicates a non-archived plan  
-GROUP BY  
-    pp.id, pp.owner\_id, type  
-HAVING  
-    MAX(ssa.transaction\_date) IS NULL OR DATEDIFF(CURDATE(), MAX(ssa.transaction\_date)) \> 365  
-ORDER BY  
-    inactivity\_days DESC;
-
 **SCREENSHOT**:
 
-![][image3]
+![Assessment_Q3 Screenshot](https://github.com/user-attachments/assets/1fe913ec-a113-46dd-8e5d-404af1da715d)
+
 
 **Explanation:**
 
@@ -158,44 +78,17 @@ Selects the following columns:
 **HAVING MAX(ssa.transaction\_date) IS NULL OR DATEDIFF(CURDATE(), MAX(ssa.transaction\_date)) \> 365:** Filters the grouped results to include only plans that either have no transactions (MAX(ssa.transaction\_date) IS NULL) or whose last transaction date was more than 365 days ago.  
 **ORDER BY inactivity\_days DESC:** Sorts the final result set in descending order based on the inactivity\_days, showing the most inactive accounts first.
 
+__________________________________________________________________
+
+
 **Assessment\_Q4**  
-**CODE**:
-
-WITH UserTenure AS (  
-    SELECT  
-        id AS customer\_id,  
-        CONCAT(first\_name, ' ', last\_name) AS customer\_name,  
-        TIMESTAMPDIFF(MONTH, created\_on, CURDATE()) AS tenure\_months  
-    FROM  
-        adashi\_staging.users\_customuser  
-),  
-TransactionValues AS (  
-    SELECT  
-        owner\_id,  
-        COUNT(\*) AS total\_transactions,  
-        AVG((confirmed\_amount \- deduction\_amount) / 100000\) AS avg\_transaction\_value  
-    FROM  
-        adashi\_staging.savings\_savingsaccount  
-    GROUP BY  
-        owner\_id  
-)  
-SELECT  
-    ut.customer\_id,  
-    ut.customer\_name,  
-    ut.tenure\_months,  
-    COALESCE(tv.total\_transactions, 0\) AS total\_transactions,  
-    ROUND(COALESCE((tv.total\_transactions / ut.tenure\_months) \* 12 \* (tv.avg\_transaction\_value \* 0.001), 0), 2\) AS estimated\_clv  
-FROM  
-    UserTenure ut  
-LEFT JOIN  
-    TransactionValues tv ON ut.customer\_id \= tv.owner\_id  
-ORDER BY  
-    estimated\_clv DESC;
-
 **SCREENSHOT**:  
-![][image4]
+
+![Assessment_Q4 Screenshot](https://github.com/user-attachments/assets/9fe50800-de0a-4670-bf87-ad961625491a)
+
 
 **Explanation:**  
+
 **WITH UserTenure AS (...):** This Common Table Expression (CTE) calculates the account tenure for each customer in months.
 
 * **SELECT id AS customer\_id, CONCAT(first\_name, ' ', last\_name) AS customer\_name, TIMESTAMPDIFF(MONTH, created\_on, CURDATE()) AS tenure\_months:** Selects the user's ID (aliased as customer\_id), their full name by concatenating first\_name and last\_name (aliased as customer\_name), and calculates the difference in months between their created\_on date and the current date (CURDATE()) (aliased as tenure\_months).  
